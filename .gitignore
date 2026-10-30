@@ -1,0 +1,23 @@
+# Secretos y credenciales
+.env
+*.pem
+secrets/
+*.key
+*.token
+api_keys.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Logs y temporales
+*.log
+logs/
+.DS_Store
+tmp/

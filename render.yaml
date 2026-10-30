@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: fenix-studio-router-v3
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "7860"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SILICONFLOW_API_KEY
+        sync: false
+      - key: SAMBANOVA_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: COHERE_API_KEY
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: BASETEN_API_KEY
+        sync: false
+      - key: FASTROUTER_API_KEY
+        sync: false
+      - key: UNOROUTER_API_KEY
+        sync: false
+      - key: ROUTEWAY_API_KEY
+        sync: false
+      - key: TOKENHARBOR_API_KEY
+        sync: false
+      - key: REQUESTY_API_KEY
+        sync: false
+      - key: PLUGSKY_API_KEY
+        sync: false
+      - key: AGNES_API_KEY
+        sync: false
+      - key: AIRFORCE_API_KEY
+        sync: false
