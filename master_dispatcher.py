@@ -443,13 +443,16 @@ class FenixMasterHTTPHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self.send_header("Cache-Control", "no-cache, no-transform")
             self.send_header("X-Accel-Buffering", "no")
-            self.send_header("Connection", "keep-alive")
+            self.send_header("Connection", "close")
             self.end_headers()
+            self.close_connection = True
 
             try:
                 for chunk in GLOBAL_DISPATCHER.dispatch_streaming(user_id, payload):
                     self.wfile.write(chunk)
                     self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                return
             except Exception as exc:
                 err_frame = f'data: {json.dumps({"error": str(exc)})}\n\ndata: [DONE]\n\n'.encode("utf-8")
                 try:
@@ -458,12 +461,9 @@ class FenixMasterHTTPHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
         else:
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Cache-Control", "no-cache, no-transform")
-            self.send_header("X-Accel-Buffering", "no")
-            self.end_headers()
-
+            # Contrato HTTP/1.1 estricto: se calcula la respuesta COMPLETA antes de emitir
+            # cabeceras, para poder declarar Content-Length exacto y cerrar el socket.
+            # Prohibido escribir heartbeats (b" ") dentro del cuerpo: corrompen el JSON.
             result_holder: Dict[str, Any] = {}
             error_holder: List[Exception] = []
             done_evt = threading.Event()
@@ -478,22 +478,35 @@ class FenixMasterHTTPHandler(BaseHTTPRequestHandler):
 
             t = threading.Thread(target=_worker, daemon=True)
             t.start()
-
-            while not done_evt.wait(timeout=12.0):
-                try:
-                    self.wfile.write(b" ")
-                    self.wfile.flush()
-                except Exception:
-                    return
+            # Espera acotada por debajo del readTimeout del cliente (30 s).
+            finished = done_evt.wait(timeout=28.0)
 
             if error_holder:
-                err_json = json.dumps({"error": {"message": str(error_holder[0]), "type": "router_error"}}).encode("utf-8")
-                self.wfile.write(err_json)
-                self.wfile.flush()
+                body = json.dumps(
+                    {"error": {"message": str(error_holder[0]), "type": "router_error"}}
+                ).encode("utf-8")
+                status = 502
+            elif not finished or "data" not in result_holder:
+                body = json.dumps(
+                    {"error": {"message": "Tiempo de espera agotado en el router.", "type": "router_timeout"}}
+                ).encode("utf-8")
+                status = 504
             else:
-                resp_bytes = json.dumps(result_holder["data"]).encode("utf-8")
-                self.wfile.write(resp_bytes)
+                body = json.dumps(result_holder["data"]).encode("utf-8")
+                status = 200
+
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-cache, no-transform")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.close_connection = True
+            try:
+                self.wfile.write(body)
                 self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                return
 
 
 def main() -> None:
